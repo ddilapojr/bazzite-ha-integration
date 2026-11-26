@@ -10,6 +10,10 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+HEARTBEAT = 4        # seconds between pings; a silently dead PC is noticed in ~6 s
+CONNECT_TIMEOUT = 5  # seconds to wait for one connection attempt
+RETRY_DELAY = 3      # seconds between reconnect attempts
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -30,6 +34,7 @@ class BazziteWebSocketCoordinator:
         self.data = {}
         self.listeners = []
         self.ws_task = None
+        self.power_down = False  # server announced sleep/shutdown
 
     async def start(self):
         self.ws_task = asyncio.create_task(self._connect_websocket())
@@ -38,22 +43,61 @@ class BazziteWebSocketCoordinator:
         session = async_get_clientsession(self.hass)
         url = f"ws://{self.config['host']}:{self.config['port']}/ws"
         while True:
+            ws = None
             try:
-                _LOGGER.info(f"Connecting to Bazzite WebSocket at {url}")
-                async with session.ws_connect(url) as ws:
-                    _LOGGER.info("Bazzite WebSocket connected!")
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            new_data = msg.json()
-                            _LOGGER.debug("WebSocket message received: %s", new_data)
-                            self.data.update(new_data)
-                            self._notify_listeners()
-                        elif msg.type == aiohttp.WSMsgType.ERROR:
-                            _LOGGER.error("WebSocket error: %s", msg.data)
-                            break
+                _LOGGER.debug(f"Connecting to Bazzite WebSocket at {url}")
+                # wait_for: connecting to a sleeping PC can otherwise hang for minutes
+                ws = await asyncio.wait_for(
+                    session.ws_connect(url, heartbeat=HEARTBEAT), CONNECT_TIMEOUT
+                )
+                _LOGGER.info("Bazzite WebSocket connected!")
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        new_data = msg.json()
+                        _LOGGER.debug("WebSocket message received: %s", new_data)
+                        self._handle_message(new_data)
+                    elif msg.type in (
+                        aiohttp.WSMsgType.ERROR,
+                        aiohttp.WSMsgType.CLOSE,
+                        aiohttp.WSMsgType.CLOSING,
+                        aiohttp.WSMsgType.CLOSED,
+                    ):
+                        break
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
-                _LOGGER.error("WebSocket connection error: %s", e)
-            await asyncio.sleep(5)  # Retry delay
+                _LOGGER.debug("WebSocket connection error: %s", e)
+
+            # Connection is gone (PC asleep, off or unreachable): go unavailable now,
+            # then close, since closing a dead peer can take a few seconds.
+            self._mark_offline()
+            if ws is not None and not ws.closed:
+                try:
+                    async with asyncio.timeout(2):
+                        await ws.close()
+                except Exception:
+                    pass
+            await asyncio.sleep(RETRY_DELAY)
+
+    def _handle_message(self, new_data):
+        power = new_data.pop("power", None)
+        if power in ("sleep", "shutdown"):
+            # Server is about to go down: flip to unavailable immediately
+            self.power_down = True
+            self._notify_listeners()
+            return
+        if power == "on":
+            self.power_down = False
+        if new_data or power == "on":
+            self.data.update(new_data)
+            self._notify_listeners()
+
+    def _mark_offline(self):
+        if not self.data and not self.power_down:
+            return  # already offline; don't rewrite state every retry
+        self.data = {}
+        self.power_down = False
+        self._notify_listeners()
 
     def _notify_listeners(self):
         for update_callback in self.listeners:
@@ -80,7 +124,7 @@ class BazziteGameSensor(Entity):
         
     @property
     def available(self):
-        return "status" in self.coordinator.data
+        return "status" in self.coordinator.data and not self.coordinator.power_down
 
     @property
     def icon(self):
@@ -112,4 +156,4 @@ class BazziteCPUTemperatureSensor(Entity):
         
     @property
     def available(self):
-        return "cpu_temperature" in self.coordinator.data
+        return "cpu_temperature" in self.coordinator.data and not self.coordinator.power_down
