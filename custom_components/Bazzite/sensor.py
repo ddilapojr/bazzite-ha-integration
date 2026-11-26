@@ -25,29 +25,6 @@ async def async_setup_entry(
     )
 
 
-# Shown in the dropdown from the start; anything else (games, other apps) is
-# added the first time it appears.
-DEFAULT_ACTIVITY_OPTIONS = [
-    "Idle",
-    "Jellyfin",
-    "Plex",
-    "Kodi",
-    "VLC",
-    "Moonlight",
-    "RetroArch",
-    "Dolphin",
-    "PCSX2",
-    "RPCS3",
-    "Heroic Games Launcher",
-    "Lutris",
-    "Spotify",
-    "Discord",
-    "Firefox",
-    "Chrome",
-    "Brave",
-]
-
-
 class BazziteGameSensor(SensorEntity):
     """Current activity (game or app) reported by Bazzite."""
 
@@ -70,11 +47,6 @@ class BazziteGameSensor(SensorEntity):
 
         self._attr_icon = "mdi:monitor-dashboard"
 
-        # Enum sensor: Home Assistant shows the known activities as a
-        # dropdown in automations and the UI.
-        self._attr_device_class = SensorDeviceClass.ENUM
-        self._seen_options = list(DEFAULT_ACTIVITY_OPTIONS)
-
         self._attr_device_info = DeviceInfo(
             identifiers={
                 (DOMAIN, coordinator.entry.entry_id)
@@ -87,31 +59,19 @@ class BazziteGameSensor(SensorEntity):
             model="Bazzite Gaming PC",
         )
 
-        coordinator.async_add_listener(self._handle_update)
-
-    def _handle_update(self) -> None:
-        """Add a new activity to the dropdown, then update the state."""
-
-        value = self.native_value
-
-        if value is not None and value not in self._seen_options:
-            self._seen_options.append(value)
-
-        self.async_write_ha_state()
-
-    @property
-    def options(self) -> list[str]:
-        """All activities seen so far (the dropdown choices)."""
-
-        return self._seen_options
+        coordinator.async_add_listener(
+            self.async_write_ha_state
+        )
 
     @property
     def extra_state_attributes(self):
         """Whether the activity is a game or an app."""
 
+        activity_type = self.coordinator.data.get("activity_type")
+
         return {
-            "activity_type": self.coordinator.data.get(
-                "activity_type"
+            "activity_type": (
+                activity_type.title() if activity_type else None
             )
         }
 
@@ -121,7 +81,7 @@ class BazziteGameSensor(SensorEntity):
 
         status = self.coordinator.data.get("status")
 
-        if status is not None and status.lower() == "idle":
+        if status is not None and status.lower() in ("idle", "none"):
             return "Idle"
 
         return status
@@ -139,7 +99,7 @@ class BazziteGameSensor(SensorEntity):
         """Remove the coordinator listener."""
 
         self.coordinator.async_remove_listener(
-            self._handle_update
+            self.async_write_ha_state
         )
 
 
