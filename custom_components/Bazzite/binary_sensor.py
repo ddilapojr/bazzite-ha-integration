@@ -134,17 +134,19 @@ class BazziteInGameSensor(BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return whether a game is running."""
+        """Return whether a game (not just an app) is running."""
 
         if not self.coordinator.online:
             return False
 
-        status = self.coordinator.data.get(
-            "status",
-            "idle",
-        )
+        data = self.coordinator.data
 
-        return status != "idle"
+        # Newer servers say whether it is a game or an app; older ones
+        # only send the name.
+        if "activity_type" in data:
+            return data["activity_type"] == "game"
+
+        return data.get("status", "idle") != "idle"
 
     @property
     def available(self) -> bool:

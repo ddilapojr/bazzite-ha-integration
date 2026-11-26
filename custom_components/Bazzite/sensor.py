@@ -26,7 +26,7 @@ async def async_setup_entry(
 
 
 class BazziteGameSensor(SensorEntity):
-    """Current game reported by Bazzite."""
+    """Current activity (game or app) reported by Bazzite."""
 
     _attr_should_poll = False
     _attr_has_entity_name = True
@@ -39,13 +39,13 @@ class BazziteGameSensor(SensorEntity):
 
         self.coordinator = coordinator
 
-        self._attr_name = "Current Game"
+        self._attr_name = "Activity"
 
         # Keep the original unique ID so Home Assistant reuses the existing
         # entity (same entity_id, history and automations).
         self._attr_unique_id = "bazzite_current_game"
 
-        self._attr_icon = "mdi:gamepad-variant"
+        self._attr_icon = "mdi:monitor-dashboard"
 
         self._attr_device_info = DeviceInfo(
             identifiers={
@@ -64,8 +64,18 @@ class BazziteGameSensor(SensorEntity):
         )
 
     @property
+    def extra_state_attributes(self):
+        """Whether the activity is a game or an app."""
+
+        return {
+            "activity_type": self.coordinator.data.get(
+                "activity_type"
+            )
+        }
+
+    @property
     def native_value(self):
-        """Return the current game."""
+        """Return the current game or app, or idle."""
 
         return self.coordinator.data.get("status")
 

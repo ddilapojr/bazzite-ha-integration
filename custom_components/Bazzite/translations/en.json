@@ -22,8 +22,8 @@
   "entity": {
     "sensor": {
       "current_game": {
-        "name": "Bazzite Current Game",
-        "state": "Current game running on Bazzite"
+        "name": "Bazzite Activity",
+        "state": "Current game or app running on Bazzite"
       },
       "cpu_temperature": {
         "name": "Bazzite CPU Temperature",

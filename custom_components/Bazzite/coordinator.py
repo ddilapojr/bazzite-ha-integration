@@ -217,14 +217,19 @@ class BazziteCoordinator:
             if status is not None:
                 status = str(status)
 
-                if self._is_ignored_status(status):
-                    if self.data.get("status") != "idle":
-                        self.data["status"] = "idle"
-                        changed = True
-
-                elif self.data.get("status") != status:
+                if self.data.get("status") != status:
                     self.data["status"] = status
                     changed = True
+
+        if "activity_type" in message:
+            activity_type = message["activity_type"]
+
+            if (
+                activity_type is not None
+                and self.data.get("activity_type") != activity_type
+            ):
+                self.data["activity_type"] = activity_type
+                changed = True
 
         if "cpu_temperature" in message:
             temperature = message["cpu_temperature"]
@@ -241,16 +246,6 @@ class BazziteCoordinator:
 
         if changed:
             self._notify_listeners()
-
-    @staticmethod
-    def _is_ignored_status(status: str) -> bool:
-        """Return True for known non-game processes."""
-
-        normalized = status.strip().lower()
-
-        return normalized in {
-            "jellyfin",
-        }
 
     def _set_online(self, online: bool) -> None:
         """Update online state."""
