@@ -46,7 +46,7 @@ It connects via WebSocket to get **real-time updates** and can send **commands**
 1. In Home Assistant, open **HACS**.
 2. Click the ⋮ menu (top right) → **Custom repositories** (or **Add from a GitHub link**).
 3. Paste `https://github.com/ddilapojr/bazzite-ha-integration`, set the type to **Integration**, and click **Add**.
-4. Find **Bazzite Integration** in HACS and click **Download**.
+4. Find **Bazzite** in HACS and click **Download**.
 5. Restart Home Assistant.
 6. Go to **Settings → Devices & Services → Add Integration**, search for **Bazzite**, and enter your PC's IP address, port (`5000`) and a device name.
 
