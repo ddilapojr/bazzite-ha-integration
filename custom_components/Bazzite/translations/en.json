@@ -6,6 +6,7 @@
         "title": "Configure Bazzite",
         "description": "Connect to your Bazzite PC running the game status server.",
         "data": {
+          "device_name": "Device Name",
           "host": "Bazzite Host",
           "port": "Port"
         }
